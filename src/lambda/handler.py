@@ -135,7 +135,7 @@ def get_unread_emails_last_hour(service):
 
             body = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='ignore') if body_data else ''
             email_data.append((message['id'], f"Subject: {subject}\n\n{body}"))
-
+            logger.info(f"Fetched {len(email_data)} unread emails from the last hour.")
         return email_data
     except Exception as e:
         logger.error(f"Error fetching emails: {str(e)}")
@@ -254,24 +254,12 @@ def lambda_handler(event, context):
         
         processed_count = 0
         for msg_id, content in emails:
+            # Extract subject from content (format is "Subject: {subject}\n\n{body}")
+            subject = content.split('\n\n')[0].replace('Subject: ', '')
             # Classify email
             label = classify_with_bedrock(content)
-            logger.info(f"Classification result for message {msg_id}: {label}")
-            
-            # Handle promotional emails
-            if label == "Promotional Offers":
-                gmail_service.users().messages().modify(
-                    userId='me',
-                    id=msg_id,
-                    body={
-                        'addLabelIds': ['SPAM'],
-                        'removeLabelIds': ['INBOX']
-                    }
-                ).execute()
-                logger.info(f"Moved message {msg_id} to spam")
-            else:
-                add_label(gmail_service, msg_id, label)
-            
+            logger.info(f"Classification result for email '{subject}' (ID: {msg_id}): {label}")
+            add_label(gmail_service, msg_id, label)
             processed_count += 1
         
         return {
